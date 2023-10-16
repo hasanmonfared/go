@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type User struct {
@@ -14,17 +15,24 @@ type User struct {
 	Password string
 }
 type Task struct {
-	ID       int
-	Title    string
-	DueDate  string
-	Category string
-	IsDone   bool
-	UserID   int
+	ID         int
+	Title      string
+	DueDate    string
+	CategoryID int
+	IsDone     bool
+	UserID     int
+}
+type Category struct {
+	ID     int
+	Title  string
+	Color  string
+	UserID int
 }
 
 var userStorage []User
 var AuthenticateUser *User
 var taskStorage []Task
+var CategoryStorage []Category
 
 func main() {
 	fmt.Println("Hello to TODO app")
@@ -72,21 +80,36 @@ func createTask() {
 	scanner.Scan()
 	title = scanner.Text()
 
-	fmt.Println("please enter the task category")
+	fmt.Println("please enter the task category id")
 	scanner.Scan()
 	category = scanner.Text()
-
+	categoryID, err := strconv.Atoi(category)
+	if err != nil {
+		fmt.Printf("category id is not valid integer %v\n\n", err)
+		return
+	}
+	isFound := false
+	for _, c := range CategoryStorage {
+		if c.ID == categoryID && c.UserID == AuthenticateUser.ID {
+			isFound = true
+			break
+		}
+	}
+	if !isFound {
+		fmt.Println("category id is not found.\n")
+		return
+	}
 	fmt.Println("please enter the task du date")
 	scanner.Scan()
 	duedate = scanner.Text()
 
 	task := Task{
-		ID:       len(taskStorage) + 1,
-		Title:    title,
-		DueDate:  duedate,
-		Category: category,
-		IsDone:   false,
-		UserID:   AuthenticateUser.ID,
+		ID:         len(taskStorage) + 1,
+		Title:      title,
+		DueDate:    duedate,
+		CategoryID: categoryID,
+		IsDone:     false,
+		UserID:     AuthenticateUser.ID,
 	}
 	taskStorage = append(taskStorage, task)
 	fmt.Println("task:", title, category, duedate)
@@ -101,7 +124,13 @@ func createCategory() {
 	fmt.Println("please enter the category color")
 	scanner.Scan()
 	color = scanner.Text()
-	fmt.Println("category", title, color)
+	category := Category{
+		ID:     len(CategoryStorage) + 1,
+		Title:  title,
+		Color:  color,
+		UserID: AuthenticateUser.ID,
+	}
+	CategoryStorage = append(CategoryStorage, category)
 }
 func registerUser() {
 	var id, email, name, password string
@@ -149,11 +178,7 @@ func login() {
 			fmt.Println("The email and password not correct.")
 		}
 	}
-	if AuthenticateUser == nil {
-		fmt.Println("the email or password is not correct.")
-		return
-	}
-
+	
 	fmt.Println("user", email, password)
 }
 func listTask() {
