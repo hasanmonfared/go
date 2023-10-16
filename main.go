@@ -157,6 +157,27 @@ func registerUser() {
 		Password: password,
 	}
 	userStorage = append(userStorage, user)
+	path := "user.txt"
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		fmt.Println("path does not exist!", err)
+		file, err := os.Create(path)
+		if err != nil {
+			fmt.Println("can't create the user .txt file", err)
+			return
+		}
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			fmt.Println("file does not exist", err)
+			return
+		}
+
+	}
+	
+	file.Write([]byte(""))
+
+	file.Close()
 }
 func login() {
 	fmt.Println("login process")
@@ -178,7 +199,7 @@ func login() {
 			fmt.Println("The email and password not correct.")
 		}
 	}
-	
+
 	fmt.Println("user", email, password)
 }
 func listTask() {
