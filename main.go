@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type User struct {
@@ -29,16 +32,32 @@ type Category struct {
 	UserID int
 }
 
-var userStorage []User
-var AuthenticateUser *User
-var taskStorage []Task
-var CategoryStorage []Category
+var (
+	userStorage       []User
+	AuthenticateUser  *User
+	taskStorage       []Task
+	CategoryStorage   []Category
+	serializationMode string
+)
+
+const (
+	userStoragePath               = "user.txt"
+	ManDarAvardiSerializationMode = "mandaravardi"
+	JsonSerializationMode         = "json"
+)
 
 func main() {
+	loadUserStorageFromFile()
 	fmt.Println("Hello to TODO app")
+	sm := flag.String("serialize-mode", ManDarAvardiSerializationMode, "serialization code for store file")
 	command := flag.String("command", "no command", "create a new task")
 	flag.Parse()
-
+	switch *sm {
+	case ManDarAvardiSerializationMode:
+		serializationMode = ManDarAvardiSerializationMode
+	default:
+		serializationMode = JsonSerializationMode
+	}
 	for {
 		runCommand(*command)
 		fmt.Println("please enter another command")
@@ -157,27 +176,7 @@ func registerUser() {
 		Password: password,
 	}
 	userStorage = append(userStorage, user)
-	path := "user.txt"
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		fmt.Println("path does not exist!", err)
-		file, err := os.Create(path)
-		if err != nil {
-			fmt.Println("can't create the user .txt file", err)
-			return
-		}
-	} else {
-		file, err := os.Open(path)
-		if err != nil {
-			fmt.Println("file does not exist", err)
-			return
-		}
-
-	}
-	
-	file.Write([]byte(""))
-
-	file.Close()
+	writeUserToFile(user)
 }
 func login() {
 	fmt.Println("login process")
@@ -208,4 +207,94 @@ func listTask() {
 			fmt.Println(task)
 		}
 	}
+}
+func loadUserStorageFromFile() {
+	file, err := os.Open(userStoragePath)
+	if err != nil {
+		fmt.Println("can't open the file.")
+	}
+	var data = make([]byte, 10240)
+	_, oErr := file.Read(data)
+	if oErr != nil {
+		fmt.Println("can't read from the file", oErr)
+		return
+	}
+	var dataStr = string(data)
+	userSlice := strings.Split(dataStr, "\n")
+	for _, u := range userSlice {
+		switch serializationMode {
+		case ManDarAvardiSerializationMode:
+			userStruct, dErr := deSerializeFromManDarAvardi(u)
+			if dErr != nil {
+				fmt.Println("can't deserialize user record to user struct", dErr)
+				return
+			}
+		case JsonSerializationMode:
+			var userStruct = User{}
+			json.Unmarshal([]byte(u), userStruct)
+		}
+
+		userStorage = append(userStorage, userStruct)
+	}
+}
+func writeUserToFile(user User) {
+	var file *os.File
+	file, err := os.OpenFile(userStoragePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0777)
+	if err != nil {
+		fmt.Println("can't create or open file.", err)
+		return
+	}
+	defer file.Close()
+
+	var data []byte
+
+	if serializationMode == ManDarAvardiSerializationMode {
+		data = []byte(fmt.Sprintf("id: %d, name: %s, password: %s\n", user.ID, user.Name, user.Email, user.Password))
+	} else if serializationMode == JsonSerializationMode {
+		var jErr error
+		data, jErr = json.Marshal(user)
+		if jErr != nil {
+			fmt.Println("can't marshal user to json", jErr)
+			return
+		}
+
+	} else {
+		fmt.Println("invalid serialization mode")
+		return
+	}
+
+	file.Write(data)
+}
+func deSerializeFromManDarAvardi(userStr string) (User, error) {
+	if userStr == "" {
+		return User{}, errors.New("user string is empty")
+	}
+	var user = User{}
+	userFields := strings.Split(userStr, ",")
+	for _, field := range userFields {
+		values := strings.Split(field, ": ")
+		if len(values) != 2 {
+			fmt.Println("field is not valid, skipping...", len(values))
+			continue
+		}
+		fieldName := strings.ReplaceAll(values[0], " ", "")
+		fieldValue := values[1]
+		switch fieldName {
+		case "id":
+			id, err := strconv.Atoi(fieldValue)
+			if err != nil {
+				fmt.Println("strconv error", err)
+				return User{}, errors.New("strconv error")
+			}
+			user.ID = id
+		case "name":
+			user.Name = fieldValue
+		case "email":
+			user.Email = fieldValue
+		case "password":
+			user.Password = fieldValue
+		}
+	}
+	fmt.Printf("user: %+v\n", user)
+	return user, nil
 }
