@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -47,17 +49,20 @@ const (
 )
 
 func main() {
-	loadUserStorageFromFile()
-	fmt.Println("Hello to TODO app")
-	sm := flag.String("serialize-mode", ManDarAvardiSerializationMode, "serialization code for store file")
+
+	serializeMode := flag.String("serialize-mode", ManDarAvardiSerializationMode, "serialization code for store file")
 	command := flag.String("command", "no command", "create a new task")
 	flag.Parse()
-	switch *sm {
+	loadUserStorageFromFile(*serializeMode)
+	fmt.Println("Hello to TODO app")
+
+	switch *serializeMode {
 	case ManDarAvardiSerializationMode:
 		serializationMode = ManDarAvardiSerializationMode
 	default:
 		serializationMode = JsonSerializationMode
 	}
+
 	for {
 		runCommand(*command)
 		fmt.Println("please enter another command")
@@ -173,7 +178,7 @@ func registerUser() {
 		ID:       len(userStorage) + 1,
 		Name:     name,
 		Email:    email,
-		Password: password,
+		Password: hashThePassword(password),
 	}
 	userStorage = append(userStorage, user)
 	writeUserToFile(user)
@@ -190,7 +195,7 @@ func login() {
 	password = scanner.Text()
 
 	for _, user := range userStorage {
-		if user.Email == email && user.Password == password {
+		if user.Email == email && user.Password == hashThePassword(password) {
 			AuthenticateUser = &user
 
 			break
@@ -208,7 +213,7 @@ func listTask() {
 		}
 	}
 }
-func loadUserStorageFromFile() {
+func loadUserStorageFromFile(serializationMode string) {
 	file, err := os.Open(userStoragePath)
 	if err != nil {
 		fmt.Println("can't open the file.")
@@ -222,16 +227,27 @@ func loadUserStorageFromFile() {
 	var dataStr = string(data)
 	userSlice := strings.Split(dataStr, "\n")
 	for _, u := range userSlice {
+		var userStruct = User{}
+
 		switch serializationMode {
 		case ManDarAvardiSerializationMode:
-			userStruct, dErr := deSerializeFromManDarAvardi(u)
+			var dErr error
+			userStruct, dErr = deSerializeFromManDarAvardi(u)
 			if dErr != nil {
 				fmt.Println("can't deserialize user record to user struct", dErr)
 				return
 			}
 		case JsonSerializationMode:
-			var userStruct = User{}
-			json.Unmarshal([]byte(u), userStruct)
+			if u[0] != '{' && u[len(u)-1] != '}' {
+				continue
+			}
+			uErr := json.Unmarshal([]byte(u), &userStruct)
+			if uErr != nil {
+				fmt.Println("can't deserialize user record to user struct from json mode", uErr)
+				return
+			}
+		default:
+			fmt.Println("invalid serialization mode")
 		}
 
 		userStorage = append(userStorage, userStruct)
@@ -257,7 +273,7 @@ func writeUserToFile(user User) {
 			fmt.Println("can't marshal user to json", jErr)
 			return
 		}
-
+		data = append(data, []byte("\n")...)
 	} else {
 		fmt.Println("invalid serialization mode")
 		return
@@ -297,4 +313,8 @@ func deSerializeFromManDarAvardi(userStr string) (User, error) {
 	}
 	fmt.Printf("user: %+v\n", user)
 	return user, nil
+}
+func hashThePassword(password string) string {
+	hash := md5.Sum([]byte(password))
+	return hex.EncodeToString(hash[:])
 }
