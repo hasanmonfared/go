@@ -1,41 +1,51 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"sort"
-	"strings"
+	"interface_test/log"
+	"interface_test/richerror"
+	"os"
+	"strconv"
 )
-
-func main() {
-	name := "Hassn"
-	stringRider := strings.NewReader(name)
-	scanner := bufio.NewScanner(stringRider)
-	scanner.Scan()
-	fmt.Println("output")
-	fmt.Println(scanner.Text())
-	var scores = Int{6, 78, 25, 74, 36, 4, 1, 5, 7}
-
-	fmt.Println("before", scores)
-	sort.Sort(scores)
-	fmt.Println("after", scores)
-
-}
-
-type Int []int
-
-func (in Int) Len() int {
-	return len(in)
-}
-func (in Int) Less(i, j int) bool {
-	return in[i] < in[j]
-}
-func (in Int) Swap(i, j int) {
-	in[i], in[j] = in[j], in[i]
-}
 
 type User struct {
 	ID   uint
 	Name string
 }
-type userStore map[uint]User
+
+func (u User) String() string {
+	return fmt.Sprintf("User{id:%d, name: %s}", u.ID, u.Name)
+}
+func main() {
+	//u := User{
+	//	ID:   123,
+	//	Name: "Hassan",
+	//}
+	//fmt.Println(u)
+	logger := log.Log{}
+
+	f, oErr := os.OpenFile("storage/data.txt", os.O_RDWR, 0777)
+	if oErr != nil {
+		logger.Append(oErr)
+
+	}
+	user, gErr := getUserByID(0)
+	if gErr != nil {
+		logger.Append(gErr)
+
+	}
+	fmt.Println("user", user)
+}
+
+func getUserByID(id int) (User, error) {
+	if id == 0 {
+		return User{}, &richerror.RichError{
+			Message: "id is not valid",
+			MetaData: map[string]string{
+				"id": strconv.Itoa(id),
+			},
+			Operation: "getUserByID",
+		}
+	}
+	return User{}, nil
+}
