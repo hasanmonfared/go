@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"interface_test/richerror"
+	"interface_test/simpleerror"
 	"os"
 )
 
@@ -16,8 +17,29 @@ type Log struct {
 //			fmt.Println("i", i, "error", e)
 //		}
 //	}
-func (l Log) Append(r richerror.RichError) {
-	l.Errors = append(l.Errors, r)
+func (l Log) Append(err error) {
+	var finalError richerror.RichError
+	rErr, ok := err.(*richerror.RichError)
+	if ok {
+		finalError = *rErr
+	} else {
+		sErr, ok := err.(*simpleerror.SimpleError)
+		if ok {
+			finalError = richerror.RichError{
+				Message:   sErr.Output,
+				MetaData:  nil,
+				Operation: sErr.Operation,
+			}
+		} else {
+			finalError = richerror.RichError{
+				Message:   err.Error(),
+				MetaData:  nil,
+				Operation: "unknown",
+			}
+		}
+
+	}
+	l.Errors = append(l.Errors, finalError)
 }
 func (l Log) Save() {
 	f, _ := os.OpenFile("errors.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0777)
