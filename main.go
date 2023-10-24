@@ -18,11 +18,6 @@ func (u User) String() string {
 	return fmt.Sprintf("User{id:%d, name: %s}", u.ID, u.Name)
 }
 func main() {
-	//u := User{
-	//	ID:   123,
-	//	Name: "Hassan",
-	//}
-	//fmt.Println(u)
 	logger := log.Log{}
 
 	_, oErr := os.OpenFile("storage/data.txt", os.O_RDWR, 0777)

@@ -12,12 +12,7 @@ type Log struct {
 	Errors []richerror.RichError
 }
 
-//	Save func (l Log) Print() {
-//		for i, e := range l.Errors {
-//			fmt.Println("i", i, "error", e)
-//		}
-//	}
-func (l Log) Append(err error) {
+func (l *Log) Append(err error) {
 	var finalError richerror.RichError
 	rErr, ok := err.(*richerror.RichError)
 	if ok {
@@ -41,7 +36,7 @@ func (l Log) Append(err error) {
 	}
 	l.Errors = append(l.Errors, finalError)
 }
-func (l Log) Save() {
+func (l *Log) Save() {
 	f, _ := os.OpenFile("errors.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0777)
 	defer f.Close()
 	data, err := json.Marshal(l.Errors)

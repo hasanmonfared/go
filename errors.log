@@ -1,1 +1,1 @@
-nullnullnullnullnullnullnull
+[{"Message":"open storage/data.txt: no such file or directory","MetaData":null,"Operation":"unknown"},{"Message":"id is not valid","MetaData":{"id":"0"},"Operation":"getUserByID"},{"Message":"id is not valid","MetaData":{"id":"0"},"Operation":"getUserByIDTwo"},{"Message":"id is 0","MetaData":null,"Operation":"getUserByIDThree"}]
