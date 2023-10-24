@@ -1,24 +1,19 @@
 package main
 
 import (
+	"app/constant"
+	"app/contract"
+	"app/entity"
+	"app/filestore"
 	"bufio"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
-type User struct {
-	ID       int
-	Name     string
-	Email    string
-	Password string
-}
 type Task struct {
 	ID         int
 	Title      string
@@ -34,37 +29,37 @@ type Category struct {
 	UserID int
 }
 
+const (
+	userStoragePath = "user.txt"
+)
+
 var (
-	userStorage       []User
-	AuthenticateUser  *User
+	userStorage       []entity.User
+	AuthenticateUser  *entity.User
 	taskStorage       []Task
 	CategoryStorage   []Category
 	serializationMode string
 )
 
-const (
-	userStoragePath               = "user.txt"
-	ManDarAvardiSerializationMode = "mandaravardi"
-	JsonSerializationMode         = "json"
-)
-
 func main() {
 
-	serializeMode := flag.String("serialize-mode", ManDarAvardiSerializationMode, "serialization code for store file")
+	serializeMode := flag.String("serialize-mode", constant.ManDarAvardiSerializationMode, "serialization code for store file")
 	command := flag.String("command", "no command", "create a new task")
 	flag.Parse()
-	loadUserStorageFromFile(*serializeMode)
+
 	fmt.Println("Hello to TODO app")
 
 	switch *serializeMode {
-	case ManDarAvardiSerializationMode:
-		serializationMode = ManDarAvardiSerializationMode
+	case constant.ManDarAvardiSerializationMode:
+		serializationMode = constant.ManDarAvardiSerializationMode
 	default:
-		serializationMode = JsonSerializationMode
+		serializationMode = constant.JsonSerializationMode
 	}
-
+	var userFileStore = filestore.New(userStoragePath, serializationMode)
+	users := userFileStore.Load()
+	userStorage = append(userStorage, users...)
 	for {
-		runCommand(*command)
+		runCommand(userFileStore, *command)
 		fmt.Println("please enter another command")
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
@@ -72,7 +67,7 @@ func main() {
 	}
 
 }
-func runCommand(command string) {
+func runCommand(userFileStore contract.UserWriteStore, command string) {
 
 	if command != "register-user" && command != "exit" && AuthenticateUser == nil {
 		login()
@@ -89,7 +84,7 @@ func runCommand(command string) {
 	case "create-category":
 		createCategory()
 	case "register-user":
-		registerUser()
+		registerUser(userFileStore)
 	case "exist":
 		os.Exit(0)
 	default:
@@ -156,7 +151,8 @@ func createCategory() {
 	}
 	CategoryStorage = append(CategoryStorage, category)
 }
-func registerUser() {
+
+func registerUser(store contract.UserWriteStore) {
 	var id, email, name, password string
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -174,14 +170,14 @@ func registerUser() {
 	id = email
 
 	fmt.Println("user", id, email, password)
-	user := User{
+	user := entity.User{
 		ID:       len(userStorage) + 1,
 		Name:     name,
 		Email:    email,
 		Password: hashThePassword(password),
 	}
 	userStorage = append(userStorage, user)
-	writeUserToFile(user)
+	store.Save(user)
 }
 func login() {
 	fmt.Println("login process")
@@ -213,107 +209,7 @@ func listTask() {
 		}
 	}
 }
-func loadUserStorageFromFile(serializationMode string) {
-	file, err := os.Open(userStoragePath)
-	if err != nil {
-		fmt.Println("can't open the file.")
-	}
-	var data = make([]byte, 10240)
-	_, oErr := file.Read(data)
-	if oErr != nil {
-		fmt.Println("can't read from the file", oErr)
-		return
-	}
-	var dataStr = string(data)
-	userSlice := strings.Split(dataStr, "\n")
-	for _, u := range userSlice {
-		var userStruct = User{}
 
-		switch serializationMode {
-		case ManDarAvardiSerializationMode:
-			var dErr error
-			userStruct, dErr = deSerializeFromManDarAvardi(u)
-			if dErr != nil {
-				fmt.Println("can't deserialize user record to user struct", dErr)
-				return
-			}
-		case JsonSerializationMode:
-			if u[0] != '{' && u[len(u)-1] != '}' {
-				continue
-			}
-			uErr := json.Unmarshal([]byte(u), &userStruct)
-			if uErr != nil {
-				fmt.Println("can't deserialize user record to user struct from json mode", uErr)
-				return
-			}
-		default:
-			fmt.Println("invalid serialization mode")
-		}
-
-		userStorage = append(userStorage, userStruct)
-	}
-}
-func writeUserToFile(user User) {
-	var file *os.File
-	file, err := os.OpenFile(userStoragePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		fmt.Println("can't create or open file.", err)
-		return
-	}
-	defer file.Close()
-
-	var data []byte
-
-	if serializationMode == ManDarAvardiSerializationMode {
-		data = []byte(fmt.Sprintf("id: %d, name: %s, password: %s\n", user.ID, user.Name, user.Email, user.Password))
-	} else if serializationMode == JsonSerializationMode {
-		var jErr error
-		data, jErr = json.Marshal(user)
-		if jErr != nil {
-			fmt.Println("can't marshal user to json", jErr)
-			return
-		}
-		data = append(data, []byte("\n")...)
-	} else {
-		fmt.Println("invalid serialization mode")
-		return
-	}
-
-	file.Write(data)
-}
-func deSerializeFromManDarAvardi(userStr string) (User, error) {
-	if userStr == "" {
-		return User{}, errors.New("user string is empty")
-	}
-	var user = User{}
-	userFields := strings.Split(userStr, ",")
-	for _, field := range userFields {
-		values := strings.Split(field, ": ")
-		if len(values) != 2 {
-			fmt.Println("field is not valid, skipping...", len(values))
-			continue
-		}
-		fieldName := strings.ReplaceAll(values[0], " ", "")
-		fieldValue := values[1]
-		switch fieldName {
-		case "id":
-			id, err := strconv.Atoi(fieldValue)
-			if err != nil {
-				fmt.Println("strconv error", err)
-				return User{}, errors.New("strconv error")
-			}
-			user.ID = id
-		case "name":
-			user.Name = fieldValue
-		case "email":
-			user.Email = fieldValue
-		case "password":
-			user.Password = fieldValue
-		}
-	}
-	fmt.Printf("user: %+v\n", user)
-	return user, nil
-}
 func hashThePassword(password string) string {
 	hash := md5.Sum([]byte(password))
 	return hex.EncodeToString(hash[:])
