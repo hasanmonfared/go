@@ -4,7 +4,9 @@ import (
 	"app/constant"
 	"app/contract"
 	"app/entity"
-	"app/filestore"
+	"app/repository/filestore"
+	"app/repository/memorystore"
+	"app/service/task"
 	"bufio"
 	"crypto/md5"
 	"encoding/hex"
@@ -14,21 +16,6 @@ import (
 	"strconv"
 )
 
-type Task struct {
-	ID         int
-	Title      string
-	DueDate    string
-	CategoryID int
-	IsDone     bool
-	UserID     int
-}
-type Category struct {
-	ID     int
-	Title  string
-	Color  string
-	UserID int
-}
-
 const (
 	userStoragePath = "user.txt"
 )
@@ -36,12 +23,13 @@ const (
 var (
 	userStorage       []entity.User
 	AuthenticateUser  *entity.User
-	taskStorage       []Task
-	CategoryStorage   []Category
+	CategoryStorage   []entity.Category
 	serializationMode string
 )
 
 func main() {
+	taskMemoryRepo := memorystore.NewTaskStore()
+	taskService := task.NewService(taskMemoryRepo)
 
 	serializeMode := flag.String("serialize-mode", constant.ManDarAvardiSerializationMode, "serialization code for store file")
 	command := flag.String("command", "no command", "create a new task")
@@ -59,7 +47,7 @@ func main() {
 	users := userFileStore.Load()
 	userStorage = append(userStorage, users...)
 	for {
-		runCommand(userFileStore, *command)
+		runCommand(userFileStore, *command, &taskService)
 		fmt.Println("please enter another command")
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
@@ -67,7 +55,7 @@ func main() {
 	}
 
 }
-func runCommand(userFileStore contract.UserWriteStore, command string) {
+func runCommand(userFileStore contract.UserWriteStore, command string, taskService *task.Service) {
 
 	if command != "register-user" && command != "exit" && AuthenticateUser == nil {
 		login()
@@ -78,9 +66,9 @@ func runCommand(userFileStore contract.UserWriteStore, command string) {
 
 	switch command {
 	case "create-task":
-		createTask()
+		createTask(taskService)
 	case "list-task":
-		listTask()
+		listTask(taskService)
 	case "create-category":
 		createCategory()
 	case "register-user":
@@ -91,7 +79,7 @@ func runCommand(userFileStore contract.UserWriteStore, command string) {
 		fmt.Println("command is not valid", command)
 	}
 }
-func createTask() {
+func createTask(taskService *task.Service) {
 	var title, duedate, category string
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -107,31 +95,21 @@ func createTask() {
 		fmt.Printf("category id is not valid integer %v\n\n", err)
 		return
 	}
-	isFound := false
-	for _, c := range CategoryStorage {
-		if c.ID == categoryID && c.UserID == AuthenticateUser.ID {
-			isFound = true
-			break
-		}
-	}
-	if !isFound {
-		fmt.Println("category id is not found.\n")
-		return
-	}
+
 	fmt.Println("please enter the task du date")
 	scanner.Scan()
 	duedate = scanner.Text()
-
-	task := Task{
-		ID:         len(taskStorage) + 1,
-		Title:      title,
-		DueDate:    duedate,
-		CategoryID: categoryID,
-		IsDone:     false,
-		UserID:     AuthenticateUser.ID,
+	response, err := taskService.Create(task.CreateRequest{
+		Title:               title,
+		DueDate:             duedate,
+		CategoryID:          categoryID,
+		AuthenticatedUserID: AuthenticateUser.ID,
+	})
+	if err != nil {
+		fmt.Println("error", err)
+		return
 	}
-	taskStorage = append(taskStorage, task)
-	fmt.Println("task:", title, category, duedate)
+	fmt.Println("create task :", response.Task)
 }
 func createCategory() {
 	var title, color string
@@ -143,7 +121,7 @@ func createCategory() {
 	fmt.Println("please enter the category color")
 	scanner.Scan()
 	color = scanner.Text()
-	category := Category{
+	category := entity.Category{
 		ID:     len(CategoryStorage) + 1,
 		Title:  title,
 		Color:  color,
@@ -202,12 +180,13 @@ func login() {
 
 	fmt.Println("user", email, password)
 }
-func listTask() {
-	for _, task := range taskStorage {
-		if task.UserID == AuthenticateUser.ID {
-			fmt.Println(task)
-		}
+func listTask(taskService *task.Service) {
+	userTask, err := taskService.List(task.ListRequest{UserID: AuthenticateUser.ID})
+	if err != nil {
+		fmt.Println("error", err)
+		return
 	}
+	fmt.Println("user tasks", userTask.Tasks)
 }
 
 func hashThePassword(password string) string {
