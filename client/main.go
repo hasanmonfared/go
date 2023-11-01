@@ -22,6 +22,13 @@ func main() {
 
 	fmt.Println(connection.LocalAddr())
 	req := deliveryparam.Request{Command: message}
+	if req.Command == "create-task" {
+		req.CreateTaskRequest = deliveryparam.CreateTaskRequest{
+			Title:      "test",
+			DueDate:    "test",
+			CategoryID: 1,
+		}
+	}
 	serializeData, mErr := json.Marshal(&req)
 	if mErr != nil {
 		log.Fatalln("can't write data to connection", mErr)
