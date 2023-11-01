@@ -1,6 +1,8 @@
-package client
+package main
 
 import (
+	"app/delivery/deliveryparam"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -19,7 +21,13 @@ func main() {
 	defer connection.Close()
 
 	fmt.Println(connection.LocalAddr())
-	numberOfWriteBytes, rErr := connection.Write([]byte(message))
+	req := deliveryparam.Request{Command: message}
+	serializeData, mErr := json.Marshal(&req)
+	if mErr != nil {
+		log.Fatalln("can't write data to connection", mErr)
+	}
+
+	numberOfWriteBytes, rErr := connection.Write(serializeData)
 	if rErr != nil {
 		log.Fatalln("can't write data in connection")
 	}

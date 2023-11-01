@@ -1,6 +1,7 @@
 package main
 
 import (
+	"app/delivery/deliveryparam"
 	"app/repository/memorystore"
 	"app/service/task"
 	"encoding/json"
@@ -9,26 +10,11 @@ import (
 	"net"
 )
 
-//	type Server struct {
-//		listener net.Listener
-//	}
-//
-// func (s Server) createTask() {
-//
-// }
-//
-// func (s Server) ListTasks() {
-//
-// }
-type Request struct {
-	Command string
-}
-
 func main() {
 
 	const (
 		network = "tcp"
-		address = "127.0.1.1:8283"
+		address = "127.0.1.1:8282"
 	)
 
 	listener, err := net.Listen(network, address)
@@ -58,44 +44,50 @@ func main() {
 
 		fmt.Printf("client address : %s,numberOfReadBytes: %d,data: %s\n",
 			connection.RemoteAddr(), numberOfReadBytes, string(rawRequest))
-		req := &Request{}
-		if uErr := json.Unmarshal(rawRequest, req); uErr != nil {
+		req := &deliveryparam.Request{}
+		if uErr := json.Unmarshal(rawRequest[:numberOfReadBytes], req); uErr != nil {
 			log.Println("bad request", uErr)
 			continue
 		}
 
 		switch req.Command {
-		case "create-task ":
+		case "create-task":
 			response, cErr := taskService.Create(task.CreateRequest{
 				Title:               "",
 				DueDate:             "",
 				CategoryID:          0,
 				AuthenticatedUserID: 0,
 			})
+
 			if cErr != nil {
 				_, wErr := connection.Write([]byte(cErr.Error()))
 				if wErr != nil {
-					log.Println("can't write to message")
+					log.Println("can't write data to connection", rErr)
+
 					continue
 				}
 			}
-			data, mErr := json.Marshal(response)
+
+			data, mErr := json.Marshal(&response)
 			if mErr != nil {
 				_, wErr := connection.Write([]byte(mErr.Error()))
 				if wErr != nil {
-					log.Println("can't marshal response.")
+					log.Println("can't marshal response", wErr)
+
 					continue
 				}
+
 				continue
 			}
 
 			_, wErr := connection.Write(data)
 			if wErr != nil {
-				log.Println("can't write to message")
+				log.Println("can't write data to connection", rErr)
+
 				continue
 			}
-			listener.Close()
 		}
 
+		connection.Close()
 	}
 }
